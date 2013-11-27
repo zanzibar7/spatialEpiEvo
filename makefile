@@ -1,7 +1,7 @@
 CC := g++
 CINCLUDE:=
 CLIB :=  -L/opt/local/lib -lcurses -lm -lgsl -lgslcblas 
-CFLAG := -O4 -I/opt/local/include 
+CFLAG := -g -I/opt/local/include 
 OBJS :=
 
 all: epi 
