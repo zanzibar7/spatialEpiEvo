@@ -1,24 +1,24 @@
-CC := g++-4.3
+CC := g++
 CINCLUDE:=
-#HD:=$(HOME)/include/4.3
-#CLIB := -lcurses -lm -lgsl -lgslcblas $(HD)/option.o $(HD)/mymath.o 
-#CFLAG := -g -I$(HD)
-CLIB := -lcurses -lm -lgsl -lgslcblas 
-CFLAG := -O4 
+CLIB :=  -L/opt/local/lib -lcurses -lm -lgsl -lgslcblas 
+CFLAG := -O4 -I/opt/local/include 
 OBJS :=
 
 all: epi 
 
-epi: main.o
-	$(CC) $(CFLAG) $(CLIB) main.cc -o $@
+epi: main.o option.o
+	$(CC) $(CFLAG) $(CLIB) $^ -o $@
 
 main.o: main.cc headers.h
 	$(CC) $(CFLAG) -c $<
 
+option.o: option.cc 
+	$(CC) $(CFLAG) -c $<
+
 ark: 
-	tar -czvf epidemic_c_code.tar.gz main.cc headers.h makefile
+	tar -czvf epidemic_c_code.tar.gz main.cc headers.h option.h option.cc makefile
 	scp epidemic_c_code.tar.gz math:~/ &> /dev/null
 
 clean:
-	rm -f -v *.o
+	rm -f -v epi *.o
 
