@@ -8,7 +8,7 @@ and recovery rate parameters beta and tauI
 
 enum state { SUSCE, INFEC, IMMUN };
 
-double min(double x,double y){ if (y<x)return y;return x;}
+double min(double x,double y){ return (y<x) ? y : x;}
 
 int simulation(
 	const int nx,
@@ -42,6 +42,8 @@ int simulation(
 
 	// configuration
 
+	const double timestep_length = .0025;
+
 	const double beta_lowerbound = 0.;
 	const double beta_upperbound = 10.;
 	const double tauI_lowerbound = 0.;
@@ -62,9 +64,8 @@ int simulation(
 		neighbors[7] = -nx-1;
 	}
 
-	const int timeRes = 24.;
 
-	/* declare data structures */
+	// ---- declare data structures -------------
 	/*
 	Model state is represented by these 5 arrays.
 	Each site has genotype (beta, tauI).
@@ -89,7 +90,7 @@ int simulation(
 	state* newpop = popf[1];
 
 
-	// initialization 
+	// ----   initialization --------------------
 
 	int num_INFEC = 0;
 	int num_IMMUN = 0;
@@ -97,10 +98,8 @@ int simulation(
 	double sum_tauI = 0.;
 	double sum_beta = 0.;
 
-	//double tic_baseline = 1./(first_beta*timeRes);
-	const double tic_baseline = .0025;
 	if (not WITH_GRAPHICS) {
-		refresh_period = 1./tic_baseline/8.;
+		refresh_period = 1./timestep_length/8.;
 	}
 
 	{
@@ -158,14 +157,19 @@ int simulation(
 		if ( 0 == t_sweep%refresh_period ) {
 			sum_tauI = 0.;
 			sum_beta = 0.;
-			num_INFEC = 0;
-			num_IMMUN = 0;
-			num_SUSCE = 0;
+			//num_INFEC = 0;
+			//num_IMMUN = 0;
+			//num_SUSCE = 0;
 			for ( int i = 0; i < nxny; ++i) {
 				switch (pop[i]) {
-					case IMMUN: ++num_IMMUN; break;
-					case SUSCE: ++num_SUSCE; break;
-					case INFEC: ++num_INFEC;
+					case IMMUN:
+						//++num_IMMUN;
+						break;
+					case SUSCE:
+						//++num_SUSCE;
+						break;
+					case INFEC:
+						//++num_INFEC;
 						sum_tauI += tauI[i];
 						sum_beta += beta[i];
 						break;
@@ -208,8 +212,6 @@ int simulation(
 					sum_tauI/double(num_INFEC),
 					t_sweep);
 			}
-			// tic_baseline =
-			// min( 1./(sum_beta/double(num_INFEC)*timeRes),sum_tauI/double(num_INFEC));
 		}
 
 		// test sanity
@@ -219,14 +221,14 @@ int simulation(
 		Assert( num_IMMUN >=0, "IMMUN must be positive" );
 
 		// update and blit
-		t_time += tic_baseline;
+		t_time += timestep_length;
 		pop = popf[t_sweep%2];
 		newpop = popf[(t_sweep+1)%2];
 		Assert( pop != newpop, "flip collision");
 
 		// for each lattice node
 		for ( int i = 0; i < nxny; ++i) {
-			double tic = tic_baseline; // one time step
+			double tic = timestep_length; // one time step
 			switch (pop[i]) {
 				case IMMUN:
 					tic_IMMUN[i] -= tic;
