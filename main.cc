@@ -1,7 +1,5 @@
 #include "headers.h"
 
-enum state { SUSCE, INFEC, IMMUN };
-
 gsl_rng* random_number_generator;
 
 bool WITH_GRAPHICS = false;
@@ -11,7 +9,7 @@ bool WITH_GRAPHICS = false;
 
 int main(int argc, const char** argv) {
 	const char* opt_message[] = {
-		"Program: epi, February 6, 2010",
+		"Program: epi, November, 2013",
 		"Started:  July 11, 2009",
 		"Purpose: evolution of a spatially structured endemic disease",
 		"Usage: epi <options>",
@@ -62,7 +60,7 @@ int main(int argc, const char** argv) {
 
 	int icStyle = 1;
 	opt.AddOption( new OptionInt('c',&icStyle, (const char*)
-		"\t-c#\tinitial condition style, 1=point, 2=ring, 3=extinct (int)"));
+		"\t-c#\tinitial condition style, 1=point, 2=wave, 3=extinct (int)"));
 
 	int num_trials = 1;
 	opt.AddOption( new OptionInt('N',&num_trials, (const char*)
@@ -79,18 +77,20 @@ int main(int argc, const char** argv) {
 
 	if ( 3 == icStyle) {
 		for (int i = 0; i < num_trials; ++i ) {
-			extinction( nx, ny, sweeps, mu, first_beta, first_tauI, icStyle, sleeptime );
+			extinction( nx, ny, sweeps, mu,
+				first_beta, first_tauI, icStyle, sleeptime );
 		}
 	} else {
 		for (int i = 0; i < num_trials; ++i ) {
 			if ( not WITH_GRAPHICS ) {
 				printf("# Trial %d\n",i);
 			}
-			simulation( nx, ny, sweeps, mu, first_beta, first_tauI, icStyle, sleeptime );
+			simulation( nx, ny, sweeps, mu,
+				first_beta, first_tauI, tauR,
+				icStyle, sleeptime );
 			printf("\n\n");
 		}
 	}
 
 	exit(0);
 }
-
