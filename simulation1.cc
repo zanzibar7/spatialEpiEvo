@@ -2,9 +2,9 @@ int simulation(
 	const int nx,
 	const int ny,
 	const int t_max,
-	const double mu,
+	const double mu, // mutation rate
 	const double first_beta,
-	double first_tauI,
+	const double first_tauI,
 	const int icStyle,
 	const int sleeptime
 	) {
@@ -29,20 +29,8 @@ int simulation(
 
 	const int nxny = nx*ny;
 
-	/* declare data structures */
-	double* __restrict__ beta  = new double[nxny];
-	double* __restrict__ tauI  = new double[nxny];
-	double* __restrict__ tic_INFEC = new double[nxny];
-	double* __restrict__ tic_IMMUN = new double[nxny];
-
-	state**  popf = new state*[2];
-	popf[0]   = new state[nxny];
-	popf[1]   = new state[nxny];
-	state* pop    = popf[0];
-	state* newpop = popf[1];
-
-	/* initialization */
-	int neighbors[8];
+	const int num_neighbors=8;
+	int neighbors[num_neighbors];
 	{
 		neighbors[0] = +nx+1;
 		neighbors[1] = +nx;
@@ -54,49 +42,92 @@ int simulation(
 		neighbors[7] = -nx-1;
 	}
 
+	/* declare data structures */
+	/*
+	Model state is represented by these 5 arrays.
+	Each site has genotype (beta, tauI).
+	The main state is controlled by pop.  tic_INFEC
+	and tic_IMMUN control auxillary state variables.
+
+	Indexing is based on a torus without boundaries or jumps.
+	Any lattice for could be used.
+	*/
+	double* __restrict__ beta  = new double[nxny];
+	double* __restrict__ tauI  = new double[nxny];
+	double* __restrict__ tic_INFEC = new double[nxny];
+	double* __restrict__ tic_IMMUN = new double[nxny];
+
+	/* For fast updating, we keep 2 storage arrays
+	   and switch between them to do the updates
+	*/
+	state**  popf = new state*[2];
+	popf[0]   = new state[nxny];
+	popf[1]   = new state[nxny];
+	state* pop    = popf[0];
+	state* newpop = popf[1];
+
+
+	// initialization 
+
 	int num_INFEC = 0;
 	int num_IMMUN = 0;
 	int num_SUSCE = nxny;
 	double sum_tauI = 0.;
 	double sum_beta = 0.;
 
-	{ int i;
-	for ( i = 0; i < nxny; ++i ) {
-		popf[0][i] = SUSCE;
-		popf[1][i] = SUSCE;
-		tic_INFEC[i] = 0;
-		tic_IMMUN[i] = 0;
+	{
+		int i;
+		for ( i = 0; i < nxny; ++i ) {
+			popf[0][i] = SUSCE;
+			popf[1][i] = SUSCE;
+			tic_INFEC[i] = 0;
+			tic_IMMUN[i] = 0;
+		}
+
+		switch ( icStyle ) {
+			case 1:
+				// start with 1 infected cell
+				// in the middle of the lattice.
+				i = nxny/2+nx/2;
+				pop[i] = INFEC;
+				--num_SUSCE;
+				++num_INFEC;
+				beta[i] = first_beta;
+				tauI[i] = first_tauI;
+
+				break;
+
+			case 2:
+				// start with a line of infection
+				// and a 1-sided wall of resistance
+				for ( i=nx/2; i<nxny; i+=nx) {
+					for (int j =1; j < nx/2; ++j ) { 
+						pop[i-j] = IMMUN;
+						--num_SUSCE;
+						++num_IMMUN;
+						tic_IMMUN[i-j] = tauR;
+					}
+					pop[i] = INFEC;
+					--num_SUSCE;
+					++num_INFEC;
+					beta[i] = first_beta;
+					tauI[i] = first_tauI;
+					tic_INFEC[i] = tauI[i];
+				}
+				break;
+			default:
+				Assert(false,"initial condition failure");
+		}
 	}
 
-	switch ( icStyle ) {
-		case 1:
-			i = nxny/2+nx/2; pop[i] = INFEC; beta[i] = first_beta; tauI[i] = first_tauI;
-			--num_SUSCE; ++num_INFEC;
 
-			break;
-
-		case 2:
-			for ( i=nx/2; i<nxny; i+=nx) {
-				for (int j =1; j < nx/2; ++j ) { 
-					pop[i-j] = IMMUN;
-					--num_SUSCE; ++num_IMMUN;
-					tic_IMMUN[i-j] = tauR;
-				}
-				pop[i] = INFEC;
-				beta[i] = first_beta; tauI[i] = first_tauI;
-				--num_SUSCE; ++num_INFEC;
-				tic_INFEC[i] = tauI[i];
-			}
-			break;
-	} }
-
-
-	/* main loo */
+	// main loop
 	for ( int t = 0; t < t_max*tauR; ++t ) {
 		pop = popf[t%2];
 		newpop = popf[(t+1)%2];
 		Assert( pop != newpop, "flip collision");
-		
+
+		// for each lattice node
 		for ( int i = 0; i < nxny; ++i) {
 			double tic = 1.0; // one time step
 			switch (pop[i]) {
@@ -106,7 +137,9 @@ int simulation(
 						newpop[i] = SUSCE;
 						--num_IMMUN;
 						++num_SUSCE;
-					} else { newpop[i] = IMMUN; }
+					} else {
+						newpop[i] = IMMUN;
+					}
 				//printf("%d\t%d\t%d\t%d\t%.4f\t%.4f\n", t, num_SUSCE, num_INFEC, num_IMMUN, sum_beta/double(num_INFEC), sum_tauI/double(num_INFEC));
 					break;
 				case INFEC:
@@ -117,7 +150,9 @@ int simulation(
 						++num_IMMUN;
 						tic_IMMUN[i] = tauR;
 						//printf("%dh\t%d\t%d\t%d\t%.4f\t%.4f\n", t, num_SUSCE, num_INFEC, num_IMMUN, sum_beta/double(num_INFEC), sum_tauI/double(num_INFEC));
-					} else { newpop[i] = INFEC; }
+					} else {
+						newpop[i] = INFEC;
+					}
 					break;
 				case SUSCE:
 					newpop[i] = SUSCE;
@@ -126,7 +161,7 @@ int simulation(
 						// Use random numbers to determine which
 						// neighbor infects you first.
 
-						for (int j = 0; j < 8; ++j ) { // for each neighbor
+						for (int j = 0; j < num_neighbors; ++j ) { // for each neighbor
 							int h = i+neighbors[j];
 							if ( h < 0 or h >= nxny ) { h = (h + nxny ) % nxny ; }
 
@@ -139,18 +174,24 @@ int simulation(
 								tic = toc;
 								newpop[i] = INFEC;
 
+								// assign bounded mutant beta
 								beta[i] = beta[h]*(1+gsl_ran_gaussian(random_number_generator, mu));
 								if (beta[i] < beta_lowerbound) { beta[i] = beta_lowerbound; }
 								else
 								if (beta[i] > beta_upperbound) { beta[i] = beta_upperbound; }
 
+								// assign bounded mutant tauI
 								tauI[i] = tauI[h]*(1+gsl_ran_gaussian(random_number_generator, mu));
 								if (tauI[i] < tauI_lowerbound) { tauI[i] = tauI_lowerbound; }
 								else
 								if (tauI[i] > tauI_upperbound) { tauI[i] = tauI_upperbound; }
+
+								// continue with the rest of the for-loop in case
+								// a different neighbor infected you first.
 							}
 						}
-						if ( INFEC == newpop[i] ) { // if the site is newly infected
+						if ( INFEC == newpop[i] ) {
+							// if the site is newly infected, do the rest of the state update
 							--num_SUSCE;
 							++num_INFEC;
 							tic_INFEC[i] = tauI[i];
