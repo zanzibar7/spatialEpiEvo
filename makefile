@@ -1,21 +1,23 @@
-CC:=g++
+#CC:=g++
+CC:=  clang
+CPP:=  clang++
 CINCLUDE:=
 CLIB:= -L /lib/x86_64-linux-gnu -lncurses -lgsl -lgslcblas
-CFLAG := -I/opt/local/include 
+CFLAG := -O2 -Os -Wall -Wextra -pedantic -I/opt/local/include 
 OBJS :=
 
 all: epi 
 
 epi: main.o option.o
-	$(CC) $^ $(CFLAG) $(CLIB) -o $@
+	$(CPP) $^ $(CFLAG) $(CLIB) -o $@
 
 #epi -x120 -y120 -b.01 -g30 -t100000 -R18134238 >! data1
 
 main.o: main.cc headers.h simulation.cc
-	$(CC) $(CFLAG) -c $<
+	$(CPP) $(CFLAG) -c $<
 
 option.o: option.cc 
-	$(CC) $(CFLAG) -c $<
+	$(CPP) $(CFLAG) -c $<
 
 ark: 
 	tar -czvf epidemic_c_code.tar.gz main.cc headers.h option.h option.cc makefile

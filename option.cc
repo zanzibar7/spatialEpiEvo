@@ -57,9 +57,9 @@ std::ostream& operator<<( std::ostream& out, const Option& a ) {
 }
 
 OptionBool::OptionBool(char x, void* parm, const char* d, const char* e):
-		Option(x, parm, d, e, "b") {};
+		Option(x, parm, d, e, "b") {}
 OptionBool::OptionBool(char x, void* parm, const char* d):
-		Option(x, parm, d, "b") {};
+		Option(x, parm, d, "b") {}
 bool OptionBool::read(const char arg[]) {
 	//std::cerr << arg << '\t' << parameter << std::endl;
 	const char * s = &(arg[2]);
@@ -80,9 +80,9 @@ std::ostream& OptionBool::operator<<( std::ostream& out ) {
 }
 
 OptionDouble::OptionDouble(char x, void* parm, const char* d, const char* e):
-	Option(x, parm, d, e, "d") {};
+	Option(x, parm, d, e, "d") {}
 OptionDouble::OptionDouble(char x, void* parm, const char* d):
-	Option(x, parm, d, "d") {};
+	Option(x, parm, d, "d") {}
 bool OptionDouble::read(const char* arg) {
 	const char * s = &(arg[2]);
 	int i = sscanf(s,"%lf",parameter);
@@ -91,9 +91,9 @@ bool OptionDouble::read(const char* arg) {
 }
 
 OptionInt::OptionInt(char x, void* parm, const char* d, const char* e):
-		Option(x, parm, d, e, "i") {};
+		Option(x, parm, d, e, "i") {}
 OptionInt::OptionInt(char x, void* parm, const char* d):
-		Option(x, parm, d, "i") {};
+		Option(x, parm, d, "i") {}
 bool OptionInt::read(const char* arg) {
 	const char * s = &(arg[2]);
 	int i = sscanf(s,"%d",parameter);
@@ -108,9 +108,9 @@ bool OptionInt::read(const char* arg) {
 //}
 
 OptionChar::OptionChar(char x, void* parm, const char* d, const char* e):
-	Option(x, parm, d, e, "c") {};
+	Option(x, parm, d, e, "c") {}
 OptionChar::OptionChar(char x, void* parm, const char* d):
-	Option(x, parm, d, "c") {};
+	Option(x, parm, d, "c") {}
 bool OptionChar::read(const char* arg) {
 	const char * s = &(arg[2]);
 	int i = sscanf(s,"%c",parameter);
@@ -121,10 +121,10 @@ bool OptionChar::read(const char* arg) {
 
 OptionString::OptionString(char x, void* parm,
 		const char* d, const char* e):
-		Option(x, parm, d, e, "s") {};
+		Option(x, parm, d, e, "s") {}
 OptionString::OptionString(char x, void* parm,
 		const char* d):
-		Option(x, parm, d, "s") {};
+		Option(x, parm, d, "s") {}
 bool OptionString::read(const char* arg) {
 	const char * s = &(arg[2]);
 	int i = sscanf(s,"%s",parameter);
@@ -145,12 +145,12 @@ void Options::Assert(bool t, const char* s) {
 Options::Options(void) {
 	message = (const char**)NULL;
 	exit_on_verbose = true;
-};
+}
 
 Options::Options(const char* m[]) {
 	message = m;
 	exit_on_verbose = true;
-};
+}
 
 void Options::AddOption(Option* x) { list_of_options.push_back(x); }
 
@@ -171,6 +171,7 @@ void Options::CheckOptions(const int argc, const char** argv) {
 	int mark;
 	bool found;
 	for (mark=1; argv[mark] && argv[mark][0]=='-';mark++) {
+		if ( mark >= argc ) { return;  }
 		found = false;
 		for (std::list<Option*>::iterator j=list_of_options.begin(); j!=list_of_options.end(); ++j){
 			if ( argv[mark][1] == (*j)->Symbol() ) {

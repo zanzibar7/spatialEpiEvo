@@ -1,20 +1,28 @@
-/*
-Added holes to the lattice to simulate reduction of 
-erratic heartbeat by introduction of heterogeneity.
-2010-04-17 TCR
-*/
 enum state { SUSCE, INFEC, IMMUN };
 
+// 8*8 = 64 long.  Each block of 8 is a random permutation of the integers 0-7.
+// Used to introduce a little disorder to transmission process
+const int32_t rdzer[] = {
+	7, 6, 1, 3, 2, 5, 0, 4,
+	5, 0, 6, 1, 4, 7, 3, 2,
+	1, 7, 6, 2, 5, 0, 3, 4,
+	4, 3, 7, 6, 5, 2, 0, 1,
+	0, 4, 2, 1, 6, 5, 3, 7,
+	3, 2, 4, 1, 5, 6, 7, 0,
+	2, 5, 6, 7, 4, 0, 3, 1,
+	6, 1, 2, 7, 5, 3, 4, 0,
+};
+
 int simulation(
-	const int nx,
-	const int ny,
-	const int t_max,
+	const int32_t nx,
+	const int32_t ny,
+	const uint64_t t_max,
 	const double mu,
 	const double first_beta,
 	double first_tauI
 	) {
 	// start windowing
-	int refresh_period;
+	uint32_t refresh_period;
 	if (WITH_GRAPHICS) {
 		initscr();
 		start_color(); 
@@ -28,16 +36,20 @@ int simulation(
 		refresh_period = 100;
 	}
 
-	const int tauR = 100;
+	const uint32_t tauR = 255;
+	const double beta_max = 3.;
+	const double beta_min = 0.;
+	const double tauI_max = 100.;
+	const double tauI_min = 0.;
 
-	const int nxny = nx*ny;
+	const int32_t nxny = nx*ny;
 
-	int sleeptime=10000;
+	uint32_t sleeptime=10000;
 
 	double* __restrict__ beta  = new double[nxny];
 	double* __restrict__ tauI  = new double[nxny];
-	int* __restrict__ tic_INFEC = new int[nxny];
-	int* __restrict__ tic_IMMUN = new int[nxny];
+	int16_t* __restrict__ tic_INFEC = new int16_t[nxny];
+	int16_t* __restrict__ tic_IMMUN = new int16_t[nxny];
 
 	state**  popf = new state*[2];
 	popf[0]   = new state[nxny];
@@ -45,13 +57,15 @@ int simulation(
 	state* pop    = popf[0];
 	state* newpop = popf[1];
 
-	for (int i = 0; i < nxny; ++i ) {
+	for (int32_t i = 0; i < nxny; ++i ) {
 		popf[0][i] = SUSCE;
 		popf[1][i] = SUSCE;
 		tic_INFEC[i] = 0;
 		tic_IMMUN[i] = 0;
 	}
-	int neighbors[8];
+	int32_t neighbors[8] = { nx+1, nx, nx-1, 1, -1, 0-nx+1, 0-nx, 0-nx-1 };
+	/*
+	int32_t neighbors[8];
 	{
 		neighbors[0] = 0+nx+1;
 		neighbors[1] = 0+nx;
@@ -62,14 +76,15 @@ int simulation(
 		neighbors[6] = 0-nx;
 		neighbors[7] = 0-nx-1;
 	}
+	*/
 
-	int num_INFEC = 0;
-	int num_IMMUN = 0;
-	int num_SUSCE = nxny;
+	int32_t num_INFEC = 0;
+	int32_t num_IMMUN = 0;
+	int32_t num_SUSCE = nxny;
 	double sum_tauI = 0.;
 	double sum_beta = 0.;
 
-	{ int i;
+	{ uint32_t i;
 	i = nxny/2+nx/2; pop[i] = INFEC; beta[i] = first_beta; tauI[i] = first_tauI;
 	--num_SUSCE; ++num_INFEC;
 
@@ -80,17 +95,22 @@ int simulation(
 	}
 
 
-	for ( int t = 0; t < t_max; ++t ) {
+	for ( uint64_t t = 0; t < t_max; ++t ) {
 		pop = popf[t%2];
 		newpop = popf[(t+1)%2];
 		Assert( pop != newpop, "flip collision");
 
-		for ( int i = 0; i < nxny; ++i) {
+		for ( int32_t i = 0; i < nxny; ++i) {
+			/*
+			// Added holes to the lattice to simulate reduction of 
+			// erratic heartbeat by introduction of heterogeneity.
+			// 2010-04-17 TCR
 			if ( 2 > i % 4 and 2 > (i/nx)%4 ) {
 				pop[i] = IMMUN;
 				tic_IMMUN[i] = 1;
 				continue;
 			}
+			*/
 			switch (pop[i]) {
 				case IMMUN:
 					tic_IMMUN[i]--;
@@ -113,8 +133,8 @@ int simulation(
 					newpop[i] = SUSCE;
 					{
 						double tic = 1.0; // one time step
-						for (int j = 0; j < 8; ++j ) { // BUG: not randomized
-							int h = i+neighbors[j];
+						for (uint8_t j = 0; j < 8; ++j ) { 
+							int32_t h = i+neighbors[rdzer[(((i+t)%8)*8)+j]]; // Pseudo-randomization of neighbor update order
 							if ( h < 0 or h >= nxny ) { h = (h + nxny ) % nxny ; }
 
 							if (INFEC!=pop[h]) continue;
@@ -124,18 +144,18 @@ int simulation(
 								tic = toc;
 								newpop[i] = INFEC;
 								beta[i] = beta[h]*(1+gsl_ran_gaussian(random_number_generator, mu));
-								if (beta[i] < 0.) { beta[i] = 0.; }
-								if (beta[i] > 4.) { beta[i] = 4.; }
+								if (beta[i] < beta_min) { beta[i] = beta_min; }
+								else if (beta[i] > beta_max) { beta[i] = beta_max; }
 
 								tauI[i] = tauI[h]*(1+gsl_ran_gaussian(random_number_generator, mu));
-								if (tauI[i] < 0.) { tauI[i] = 0.; }
-								if (tauI[i] > 400) { tauI[i] = 400; }
+								if (tauI[i] < tauI_min) { tauI[i] = tauI_min; }
+								if (tauI[i] > tauI_max) { tauI[i] = tauI_max; }
 							}
 						}
 						if ( INFEC == newpop[i] ) {
 							--num_SUSCE;
 							++num_INFEC;
-							tic_INFEC[i] = int(tauI[i]);
+							tic_INFEC[i] = uint32_t(tauI[i]);
 							break;
 						}
 					}
@@ -184,39 +204,36 @@ int simulation(
 					}
 				}
 				attron (COLOR_PAIR (1));
-				mvprintw(0,0," beta: %.3f",sum_beta/double(num_INFEC)*double(tauR));
+				mvprintw(0,0," beta: %.3f",sum_beta/double(num_INFEC));
 				mvprintw(0,16,"tauI: %.3f",sum_tauI/double(num_INFEC)/double(tauR));
-				mvprintw(0,30,"R: %.3f",8*sum_tauI/double(num_INFEC)*sum_beta/double(num_INFEC));
-				mvprintw(0,40,"time: %d",t);
+				mvprintw(0,30,"R: %.2f",8*(sum_tauI/double(num_INFEC))*(sum_beta/double(num_INFEC)));
+				mvprintw(0,43,"time: %d",t);
 				move(0,0);
 				refresh();
 				if ( sleeptime ) { usleep(sleeptime); }
-				//nodelay(stdscr,1);
 				{ char c = getch(); 
 					switch (c) {
 						case ' ':
-							for (char cc; cc=getchar(); ) {
+							for (char cc; (cc=getchar()); ) {
 								usleep(10);
 								if (' ' == cc ) { break; }
 							}
 							break;
 						case '0': sleeptime = 0; break;
-						case '1': sleeptime =1000; break;
-						case '2': sleeptime =10000; break;
-						case '3': sleeptime =100000; break;
-						case '4': sleeptime =1000000; break;
+						case '1': sleeptime =100; break;
+						case '2': sleeptime =1000; break;
+						case '3': sleeptime =10000; break;
+						case '4': sleeptime =100000; break;
+						case '5': sleeptime =1000000; break;
+						case '6': sleeptime =10000000; break;
 						case 'Q' :  //End program at control-d or Q
 						case '': { endwin(); return 1; break; }
 						default:
 							break;
 					}
 				}
-			// for (int j =0;!j;){usleep(1);j=getch(); printw("%d ",j); if(j>0) j=1; else j=0; }
-			// endwin(); printf("\nhitkb end\n"); return 0;
-
-
 			} else {
-				printf("%d\t%d\t%d\t%d\t%.8f\t%.8f\n",
+				printf("%lu\t%d\t%d\t%d\t%.8f\t%.8f\n",
 					t,
 					num_SUSCE,
 					num_INFEC,
@@ -232,5 +249,6 @@ int simulation(
 		Assert( num_IMMUN >=0 , "positive IMMUN" );
 	}
 	if (WITH_GRAPHICS) { endwin(); }
+	return 0;
 }
 
