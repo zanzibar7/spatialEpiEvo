@@ -16,18 +16,15 @@ while [ $a -lt $e ]; do
 	let a=1+a
 done
 
-echo $y $x | gnuplot -persist &
+echo $y $x | gnuplot -persist > /dev/null  &
 #echo $y $x
+
 exit
 
-#set logscale xy; set yrange [.1:1]; set xrange [.1:10];
 #gnuplot#
 set term x11;
 set nokey;
-set yrange [0:1]; set xrange [0:10];
-set xlabel "Transmission rate";
-set ylabel "Infection period";
-set samples 1e3;
-plot 1/(8*x) w l, 2/(8*x) w l, 4/(8*x) w l
+set logscale xy;
+plot 0 
 #gnuplot#
 

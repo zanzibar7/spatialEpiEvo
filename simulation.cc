@@ -1,96 +1,67 @@
 /*
-2010-02-06
-WARNING: there seems to be a bug in this
-code, making it difficult to identify the
-threshold values of the transmission rate
-and recovery rate parameters beta and tauI
+Added holes to the lattice to simulate reduction of 
+erratic heartbeat by introduction of heterogeneity.
+2010-04-17 TCR
 */
-
 enum state { SUSCE, INFEC, IMMUN };
-
-double min(double x,double y){ return (y<x) ? y : x;}
 
 int simulation(
 	const int nx,
 	const int ny,
 	const int t_max,
-	const double mu, // mutation rate
+	const double mu,
 	const double first_beta,
-	const double first_tauI,
-	const double tauR,
-	const int icStyle, // initial condition style
-	const int sleeptime  // time to sleep between updates
+	double first_tauI
 	) {
 	// start windowing
-	int refresh_period = -1;
+	int refresh_period;
 	if (WITH_GRAPHICS) {
-		refresh_period = 10;
 		initscr();
 		start_color(); 
-		clear();
+		//clear();
+		refresh_period = 1;
    		init_pair (1, COLOR_WHITE, COLOR_BLACK);
    		init_pair (2, COLOR_RED, COLOR_BLACK);
-   		init_pair (3, COLOR_BLUE, COLOR_BLACK);
+   		init_pair (3, COLOR_GREEN, COLOR_BLACK);
+		timeout(0);
+	} else {
+		refresh_period = 100;
 	}
-	/*
-	Currently use a fixed time-step of 1 for update
-	sweeps.  All other time scales must be relative 
-	to this, and longer timescales lead to higher
-	resolution.
-	*/
 
-
-	// configuration
-
-	const double timestep_length = .0025;
-
-	const double beta_lowerbound = 0.;
-	const double beta_upperbound = 10.;
-	const double tauI_lowerbound = 0.;
-	const double tauI_upperbound = 4.;
+	const int tauR = 100;
 
 	const int nxny = nx*ny;
 
-	const int num_neighbors=8;
-	int neighbors[num_neighbors];
-	{
-		neighbors[0] = +nx+1;
-		neighbors[1] = +nx;
-		neighbors[2] = +nx-1;
-		neighbors[3] = +1;
-		neighbors[4] = -1;
-		neighbors[5] = -nx+1;
-		neighbors[6] = -nx;
-		neighbors[7] = -nx-1;
-	}
+	int sleeptime=10000;
 
-
-	// ---- declare data structures -------------
-	/*
-	Model state is represented by these 5 arrays.
-	Each site has genotype (beta, tauI).
-	The main state is controlled by pop.  tic_INFEC
-	and tic_IMMUN control auxillary state variables.
-
-	Indexing is based on a torus without boundaries or jumps.
-	Any lattice for could be used.
-	*/
 	double* __restrict__ beta  = new double[nxny];
 	double* __restrict__ tauI  = new double[nxny];
-	double* __restrict__ tic_INFEC = new double[nxny];
-	double* __restrict__ tic_IMMUN = new double[nxny];
+	int* __restrict__ tic_INFEC = new int[nxny];
+	int* __restrict__ tic_IMMUN = new int[nxny];
 
-	/* For fast updating, we keep 2 storage arrays
-	   and switch between them to do the updates
-	*/
 	state**  popf = new state*[2];
 	popf[0]   = new state[nxny];
 	popf[1]   = new state[nxny];
 	state* pop    = popf[0];
 	state* newpop = popf[1];
 
-
-	// ----   initialization --------------------
+	for (int i = 0; i < nxny; ++i ) {
+		popf[0][i] = SUSCE;
+		popf[1][i] = SUSCE;
+		tic_INFEC[i] = 0;
+		tic_IMMUN[i] = 0;
+	}
+	int neighbors[8];
+	{
+		neighbors[0] = 0+nx+1;
+		neighbors[1] = 0+nx;
+		neighbors[2] = 0+nx-1;
+		neighbors[3] = 0+1;
+		neighbors[4] = 0-1;
+		neighbors[5] = 0-nx+1;
+		neighbors[6] = 0-nx;
+		neighbors[7] = 0-nx-1;
+	}
 
 	int num_INFEC = 0;
 	int num_IMMUN = 0;
@@ -98,169 +69,51 @@ int simulation(
 	double sum_tauI = 0.;
 	double sum_beta = 0.;
 
-	if (not WITH_GRAPHICS) {
-		refresh_period = 1./timestep_length/8.;
-	}
+	{ int i;
+	i = nxny/2+nx/2; pop[i] = INFEC; beta[i] = first_beta; tauI[i] = first_tauI;
+	--num_SUSCE; ++num_INFEC;
 
-	{
-		int i;
-		for ( i = 0; i < nxny; ++i ) {
-			popf[0][i] = SUSCE;
-			popf[1][i] = SUSCE;
-			tic_INFEC[i] = 0;
-			tic_IMMUN[i] = 0;
-		}
-
-		switch ( icStyle ) {
-			case 1:
-				// start with 1 infected cell
-				// in the middle of the lattice.
-				i = nxny/2+nx/2;
-				newpop[i] = INFEC;
-				--num_SUSCE;
-				++num_INFEC;
-				beta[i] = first_beta;
-				tauI[i] = first_tauI;
-				tic_INFEC[i] = tauI[i];
-
-				break;
-
-			case 2:
-				// start with a line of infection
-				// and a 1-sided wall of resistance
-				for ( i=nx/2; i<nxny; i+=nx) {
-					for (int j =1; j < nx/2; ++j ) { 
-						newpop[i-j] = IMMUN;
-						--num_SUSCE;
-						++num_IMMUN;
-						tic_IMMUN[i-j] = tauR;
-					}
-					newpop[i] = INFEC;
-					--num_SUSCE;
-					++num_INFEC;
-					beta[i] = first_beta;
-					tauI[i] = first_tauI;
-					tic_INFEC[i] = tauI[i];
-				}
-				break;
-			default:
-				Assert(false,"initial condition failure");
-		}
+	i = 2; pop[i] = IMMUN; tic_IMMUN[i] = tauR/2;
+	--num_SUSCE; ++num_IMMUN;
+	i = 3; pop[i] = IMMUN; tic_IMMUN[i] = tauR/2;
+	--num_SUSCE; ++num_IMMUN;
 	}
 
 
-	// main loop
-	double t_time = 0.;
-	for ( int t_sweep = 1; t_sweep < t_max and num_INFEC > 0; ++t_sweep ) {
-
-		// update outputs
-		if ( 0 == t_sweep%refresh_period ) {
-			sum_tauI = 0.;
-			sum_beta = 0.;
-			//num_INFEC = 0;
-			//num_IMMUN = 0;
-			//num_SUSCE = 0;
-			for ( int i = 0; i < nxny; ++i) {
-				switch (pop[i]) {
-					case IMMUN:
-						//++num_IMMUN;
-						break;
-					case SUSCE:
-						//++num_SUSCE;
-						break;
-					case INFEC:
-						//++num_INFEC;
-						sum_tauI += tauI[i];
-						sum_beta += beta[i];
-						break;
-					default: Assert(false,"982");
-				}
-			}
-			if (WITH_GRAPHICS) {
-				for (int i = 0; i < nxny; ++i ) {
-					move( i/nx+1, i%nx );
-					switch (pop[i]) {
-						case IMMUN:
-							addch(' ');
-							break;
-						case INFEC:
-							attron (COLOR_PAIR (2));
-							addch('*');
-							break;
-						default:
-							attron (COLOR_PAIR (3));
-							addch('.');
-							break;
-					}
-				}
-				attron (COLOR_PAIR (1));
-				mvprintw(0,0," beta: %.3f ",sum_beta/double(num_INFEC));
-				mvprintw(0,16,"tauI: %.3f ",sum_tauI/double(num_INFEC));
-				mvprintw(0,30,"R: %.2f ",
-					num_neighbors*sum_beta/double(num_INFEC)*sum_tauI/double(num_INFEC) );
-				mvprintw(0,40,"time: %.0f",t_time);
-				refresh();
-				usleep(sleeptime);
-
-			} else {
-				printf("%f\t%d\t%d\t%d\t%.8f\t%.8f\t%d\n",
-					t_time,
-					num_SUSCE,
-					num_INFEC,
-					num_IMMUN,
-					sum_beta/double(num_INFEC),
-					sum_tauI/double(num_INFEC),
-					t_sweep);
-			}
-		}
-
-		// test sanity
-		Assert( num_SUSCE + num_INFEC + num_IMMUN == nxny, "conservation" );
-		Assert( num_SUSCE >=0, "SUSCE must be positive" );
-		Assert( num_INFEC >=0, "INFEC must be positive" );
-		Assert( num_IMMUN >=0, "IMMUN must be positive" );
-
-		// update and blit
-		t_time += timestep_length;
-		pop = popf[t_sweep%2];
-		newpop = popf[(t_sweep+1)%2];
+	for ( int t = 0; t < t_max; ++t ) {
+		pop = popf[t%2];
+		newpop = popf[(t+1)%2];
 		Assert( pop != newpop, "flip collision");
 
-		// for each lattice node
 		for ( int i = 0; i < nxny; ++i) {
-			double tic = timestep_length; // one time step
+			if ( 2 > i % 4 and 2 > (i/nx)%4 ) {
+				pop[i] = IMMUN;
+				tic_IMMUN[i] = 1;
+				continue;
+			}
 			switch (pop[i]) {
 				case IMMUN:
-					tic_IMMUN[i] -= tic;
+					tic_IMMUN[i]--;
 					if ( 0 >= tic_IMMUN[i] ) {
 						newpop[i] = SUSCE;
 						--num_IMMUN;
 						++num_SUSCE;
-					} else {
-						newpop[i] = IMMUN;
-					}
-				//printf("%d\t%d\t%d\t%d\t%.4f\t%.4f\n", t, num_SUSCE, num_INFEC, num_IMMUN, sum_beta/double(num_INFEC), sum_tauI/double(num_INFEC));
+					} else { newpop[i] = IMMUN; }
 					break;
 				case INFEC:
-					tic_INFEC[i] -= tic;
+					tic_INFEC[i]--;
 					if ( 0 >= tic_INFEC[i] ) {
 						newpop[i] = IMMUN;
+						tic_IMMUN[i] = tauR;
 						--num_INFEC;
 						++num_IMMUN;
-						tic_IMMUN[i] = tauR;
-						//printf("%dh\t%d\t%d\t%d\t%.4f\t%.4f\n", t, num_SUSCE, num_INFEC, num_IMMUN, sum_beta/double(num_INFEC), sum_tauI/double(num_INFEC));
-					} else {
-						newpop[i] = INFEC;
-					}
+					} else { newpop[i] = INFEC; }
 					break;
 				case SUSCE:
 					newpop[i] = SUSCE;
 					{
-						// Check if a neighbor infects you.
-						// Use random numbers to determine which
-						// neighbor infects you first.
-
-						for (int j = 0; j < num_neighbors; ++j ) { // for each neighbor
+						double tic = 1.0; // one time step
+						for (int j = 0; j < 8; ++j ) { // BUG: not randomized
 							int h = i+neighbors[j];
 							if ( h < 0 or h >= nxny ) { h = (h + nxny ) % nxny ; }
 
@@ -270,37 +123,114 @@ int simulation(
 							if (toc < tic) {
 								tic = toc;
 								newpop[i] = INFEC;
-
-								// assign bounded mutant beta
 								beta[i] = beta[h]*(1+gsl_ran_gaussian(random_number_generator, mu));
-								if (beta[i] < beta_lowerbound) { beta[i] = beta_lowerbound; }
-								else
-								if (beta[i] > beta_upperbound) { beta[i] = beta_upperbound; }
+								if (beta[i] < 0.) { beta[i] = 0.; }
+								if (beta[i] > 4.) { beta[i] = 4.; }
 
-								// assign bounded mutant tauI
 								tauI[i] = tauI[h]*(1+gsl_ran_gaussian(random_number_generator, mu));
-								if (tauI[i] < tauI_lowerbound) { tauI[i] = tauI_lowerbound; }
-								else
-								if (tauI[i] > tauI_upperbound) { tauI[i] = tauI_upperbound; }
-
-								// continue with the rest of the for-loop in case
-								// a different neighbor infected you first.
+								if (tauI[i] < 0.) { tauI[i] = 0.; }
+								if (tauI[i] > 400) { tauI[i] = 400; }
 							}
 						}
 						if ( INFEC == newpop[i] ) {
-							// if the site is newly infected, do the rest of the state update
 							--num_SUSCE;
 							++num_INFEC;
-							tic_INFEC[i] = tauI[i];
+							tic_INFEC[i] = int(tauI[i]);
+							break;
 						}
 					}
-				//printf("%d\t%d\t%d\t%d\t%.4f\t%.4f\n", t_sweep, num_SUSCE, num_INFEC, num_IMMUN, sum_beta/double(num_INFEC), sum_tauI/double(num_INFEC));
 					break;
 				default:
 					Assert(false, "invalid state");
 			}
 		}
+
+		/////////////////////////////////////////////////////
+
+		if ( 0 == num_INFEC ) { break; }
+
+		if ( 0 == t%refresh_period ) {
+			sum_tauI = 0.;
+			sum_beta = 0.;
+			num_INFEC = 0;
+			num_IMMUN = 0;
+			num_SUSCE = 0;
+			for ( int i = 0; i < nxny; ++i) {
+				switch (newpop[i]) {
+					case IMMUN: ++num_IMMUN; break;
+					case SUSCE: ++num_SUSCE; break;
+					case INFEC: ++num_INFEC;
+						sum_tauI += tauI[i];
+						sum_beta += beta[i];
+						break;
+					default: Assert(false,"982");
+				}
+			}
+			if (WITH_GRAPHICS) {
+				for (int i = 0; i < nxny; ++i ) {
+					move( i/nx+1, i%nx );
+					switch (newpop[i]) {
+						case IMMUN:
+							addch(' ');
+							break;
+						case INFEC:
+							attron (COLOR_PAIR (2));
+							addch('*');
+							break;
+						default:
+							attron (COLOR_PAIR (3));
+							addch('*');
+							break;
+					}
+				}
+				attron (COLOR_PAIR (1));
+				mvprintw(0,0," beta: %.3f",sum_beta/double(num_INFEC)*double(tauR));
+				mvprintw(0,16,"tauI: %.3f",sum_tauI/double(num_INFEC)/double(tauR));
+				mvprintw(0,30,"R: %.3f",8*sum_tauI/double(num_INFEC)*sum_beta/double(num_INFEC));
+				mvprintw(0,40,"time: %d",t);
+				move(0,0);
+				refresh();
+				if ( sleeptime ) { usleep(sleeptime); }
+				//nodelay(stdscr,1);
+				{ char c = getch(); 
+					switch (c) {
+						case ' ':
+							for (char cc; cc=getchar(); ) {
+								usleep(10);
+								if (' ' == cc ) { break; }
+							}
+							break;
+						case '0': sleeptime = 0; break;
+						case '1': sleeptime =1000; break;
+						case '2': sleeptime =10000; break;
+						case '3': sleeptime =100000; break;
+						case '4': sleeptime =1000000; break;
+						case 'Q' :  //End program at control-d or Q
+						case '': { endwin(); return 1; break; }
+						default:
+							break;
+					}
+				}
+			// for (int j =0;!j;){usleep(1);j=getch(); printw("%d ",j); if(j>0) j=1; else j=0; }
+			// endwin(); printf("\nhitkb end\n"); return 0;
+
+
+			} else {
+				printf("%d\t%d\t%d\t%d\t%.8f\t%.8f\n",
+					t,
+					num_SUSCE,
+					num_INFEC,
+					num_IMMUN,
+					sum_beta/double(num_INFEC),
+					sum_tauI/double(num_INFEC));
+			}
+		}
+
+		Assert( num_SUSCE + num_INFEC + num_IMMUN == nxny , "conservation" );
+		Assert( num_SUSCE >=0 , "positive SUSCE" );
+		Assert( num_INFEC >=0 , "positive INFEC" );
+		Assert( num_IMMUN >=0 , "positive IMMUN" );
 	}
-	if (WITH_GRAPHICS) { usleep(100000); endwin(); }
+	if (WITH_GRAPHICS) { endwin(); }
 }
 
