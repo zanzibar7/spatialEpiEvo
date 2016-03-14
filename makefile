@@ -1,13 +1,13 @@
-CC := g++
+CC:=g++
 CINCLUDE:=
-CLIB :=  -L/opt/local/lib -lcurses -lm -lgsl -lgslcblas 
-CFLAG := -g -I/opt/local/include 
+CLIB:= -L /lib/x86_64-linux-gnu -lncurses -lgsl -lgslcblas
+CFLAG := -I/opt/local/include 
 OBJS :=
 
 all: epi 
 
 epi: main.o option.o
-	$(CC) $(CFLAG) $(CLIB) $^ -o $@
+	$(CC) $^ $(CFLAG) $(CLIB) -o $@
 
 #epi -x120 -y120 -b.01 -g30 -t100000 -R18134238 >! data1
 
@@ -24,3 +24,4 @@ ark:
 clean:
 	rm -f -v epi *.o
 
+# g++ main.cc -L /lib/x86_64-linux-gnu -lncurses -lgsl -lgslcblas option.o 
