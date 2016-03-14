@@ -8,14 +8,14 @@ bool WITH_GRAPHICS = false;
 
 int main(int argc, const char** argv) {
 	const char* opt_message[] = {
-		"Program: epi, March 13, 2016",
+		"Program: spatialEpiEvo, March 13, 2016",
 		"Author: Timothy C Reluga",
 		"License: Free for personal and academic research use only, all rights reserved",
-		"Started:  July 11, 2009",
+		"Started: July 11, 2009",
 		"Purpose: Simulate the evolution of a spatially structured endemic disease",
 		"         and make sense of the 2004 paper by van Ballegooijen and Boerlijst",
 		"         www.pnas.org/cgi/doi/10.1073/pnas.0405682101",
-		"Usage: epi <options>",
+		"Usage: spatialEpiEvo <options>",
 		"Options:",
 		"\t-v\tdisplays this message.",
 		NULL

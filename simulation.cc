@@ -1,6 +1,6 @@
 enum state { SUSCE, INFEC, IMMUN };
 
-// 8*8 = 64 long.  Each block of 8 is a random permutation of the integers 0-7.
+// 8*8 = 64 long.  Each block of 8 is a random permutation of integers 0-7.
 // Used to introduce a little disorder to transmission process
 const int32_t rdzer[] = {
 	7, 6, 1, 3, 2, 5, 0, 4,
@@ -26,7 +26,6 @@ int simulation(
 	if (WITH_GRAPHICS) {
 		initscr();
 		start_color(); 
-		//clear();
 		refresh_period = 1;
    		init_pair (1, COLOR_WHITE, COLOR_BLACK);
    		init_pair (2, COLOR_MAGENTA, COLOR_BLACK);
@@ -57,26 +56,7 @@ int simulation(
 	state* pop    = popf[0];
 	state* newpop = popf[1];
 
-	for (int32_t i = 0; i < nxny; ++i ) {
-		popf[0][i] = SUSCE;
-		popf[1][i] = SUSCE;
-		tic_INFEC[i] = 0;
-		tic_IMMUN[i] = 0;
-	}
-	int32_t neighbors[8] = { nx+1, nx, nx-1, 1, -1, 0-nx+1, 0-nx, 0-nx-1 };
-	/*
-	int32_t neighbors[8];
-	{
-		neighbors[0] = 0+nx+1;
-		neighbors[1] = 0+nx;
-		neighbors[2] = 0+nx-1;
-		neighbors[3] = 0+1;
-		neighbors[4] = 0-1;
-		neighbors[5] = 0-nx+1;
-		neighbors[6] = 0-nx;
-		neighbors[7] = 0-nx-1;
-	}
-	*/
+	int32_t neighbors[8] = {nx+1, nx, nx-1, 1, -1, 0-nx+1, 0-nx, 0-nx-1};
 
 	int32_t num_INFEC = 0;
 	int32_t num_IMMUN = 0;
@@ -84,14 +64,25 @@ int simulation(
 	double sum_tauI = 0.;
 	double sum_beta = 0.;
 
+	// initial conditions
+	for (int32_t i = 0; i < nxny; ++i ) {
+		popf[0][i] = SUSCE;
+		popf[1][i] = SUSCE;
+		tic_INFEC[i] = 0;
+		tic_IMMUN[i] = 0;
+	}
 	{ uint32_t i;
-	i = nxny/2+nx/2; pop[i] = INFEC; beta[i] = first_beta; tauI[i] = first_tauI;
-	--num_SUSCE; ++num_INFEC;
+		i = nxny/2+nx/2;
+		pop[i] = INFEC;
+		beta[i] = first_beta;
+		tauI[i] = first_tauI;
+		--num_SUSCE;
+		++num_INFEC;
 
-	i = 2; pop[i] = IMMUN; tic_IMMUN[i] = tauR/2;
-	--num_SUSCE; ++num_IMMUN;
-	i = 3; pop[i] = IMMUN; tic_IMMUN[i] = tauR/2;
-	--num_SUSCE; ++num_IMMUN;
+		i = 2; pop[i] = IMMUN; tic_IMMUN[i] = tauR/2;
+		--num_SUSCE; ++num_IMMUN;
+		i = 3; pop[i] = IMMUN; tic_IMMUN[i] = tauR/2;
+		--num_SUSCE; ++num_IMMUN;
 	}
 
 
